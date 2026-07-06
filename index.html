@@ -395,11 +395,26 @@
         };
         // ============================================================
 
+        // A malformed FRA_DATA block (bad publisher output) must degrade to
+        // an em-dash state, never a thrown error that kills the page.
+        const FRA_VALID = Array.isArray(FRA_DATA.dates) && Array.isArray(FRA_DATA.prices)
+            && FRA_DATA.prices.length >= 2
+            && FRA_DATA.dates.length === FRA_DATA.prices.length
+            && FRA_DATA.prices.every(Number.isFinite)
+            && FRA_DATA.dates.every(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+
         function renderFraStats() {
+            if (!FRA_VALID) {
+                ['fra-price', 'fra-mdd', 'fra-sharpe', 'fra-asof'].forEach(id => {
+                    document.getElementById(id).textContent = '—';
+                });
+                document.getElementById('fra-change').textContent = '';
+                return;
+            }
             const p = FRA_DATA.prices;
             const d = FRA_DATA.dates;
             const last = p[p.length - 1];
-            document.getElementById('fra-price').textContent = last.toFixed(3);
+            document.getElementById('fra-price').textContent = last.toFixed(4);
             // Daily change: only honest when the previous point is exactly
             // one day earlier — hide it across snapshot gaps.
             const chgEl = document.getElementById('fra-change');
@@ -444,7 +459,12 @@
 
         function drawFraChart(hoverIdx = null) {
             const cv = document.getElementById('fra-chart');
-            if (!cv) return;
+            if (!cv || !FRA_VALID) return;
+            cv.setAttribute('role', 'img');
+            cv.setAttribute('aria-label', 'Daily fund share price chart, '
+                + fraDateLabel(FRA_DATA.dates[0], true) + ' to '
+                + fraDateLabel(FRA_DATA.dates[FRA_DATA.dates.length - 1], true)
+                + ', latest $' + FRA_DATA.prices[FRA_DATA.prices.length - 1].toFixed(4));
             const dpr = window.devicePixelRatio || 1;
             const rect = cv.getBoundingClientRect();
             cv.width = rect.width * dpr;
