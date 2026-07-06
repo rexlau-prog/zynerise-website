@@ -203,9 +203,7 @@
             <div class="bg-black/40 border border-white/5 p-4 md:p-8 rounded-sm mb-8">
                 <div class="flex justify-end mb-4">
                     <div class="flex gap-1 border border-white/10" id="chart-tabs">
-                        <button class="chart-tab active px-4 py-2 text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400" data-style="line" onclick="setChartStyle('line')">Line</button>
-                        <button class="chart-tab px-4 py-2 text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400" data-style="area" onclick="setChartStyle('area')">Area</button>
-                        <button class="chart-tab px-4 py-2 text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400" data-style="bars" onclick="setChartStyle('bars')">Bars</button>
+                        <span class="chart-tab active px-4 py-2 text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400">Area</span>
                     </div>
                 </div>
                 <div class="relative w-full" style="height: 320px;">
@@ -383,16 +381,6 @@
         };
         // ============================================================
 
-        let chartStyle = 'line';
-
-        function setChartStyle(style) {
-            chartStyle = style;
-            document.querySelectorAll('#chart-tabs .chart-tab').forEach(t => {
-                t.classList.toggle('active', t.dataset.style === style);
-            });
-            drawFraChart();
-        }
-
         function renderFraStats() {
             const p = FRA_DATA.prices;
             const last = p[p.length - 1];
@@ -403,7 +391,7 @@
             chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
             chgEl.style.color = chg >= 0 ? '#76A846' : '#e05c5c';
             document.getElementById('fra-asof').textContent = 'As of ' + FRA_DATA.asOf;
-            document.getElementById('fra-mdd').textContent = FRA_DATA.maxDrawdown.toFixed(1) + '%';
+            document.getElementById('fra-mdd').textContent = FRA_DATA.maxDrawdown.toFixed(2) + '%';
             document.getElementById('fra-sharpe').textContent = FRA_DATA.sharpe.toFixed(2);
         }
 
@@ -443,39 +431,29 @@
 
             const green = '#76A846';
 
-            if (chartStyle === 'bars') {
-                const bw = Math.max(2, (W - padL - padR) / p.length - 3);
-                p.forEach((v, i) => {
-                    const up = i === 0 || v >= p[i - 1];
-                    c.fillStyle = up ? 'rgba(118,168,70,0.85)' : 'rgba(224,92,92,0.7)';
-                    c.fillRect(x(i) - bw / 2, y(v), bw, H - padB - y(v));
-                });
-            } else {
-                if (chartStyle === 'area') {
-                    const grad = c.createLinearGradient(0, padT, 0, H - padB);
-                    grad.addColorStop(0, 'rgba(118,168,70,0.35)');
-                    grad.addColorStop(1, 'rgba(118,168,70,0)');
-                    c.beginPath();
-                    c.moveTo(x(0), H - padB);
-                    p.forEach((v, i) => c.lineTo(x(i), y(v)));
-                    c.lineTo(x(p.length - 1), H - padB);
-                    c.closePath();
-                    c.fillStyle = grad;
-                    c.fill();
-                }
-                c.beginPath();
-                p.forEach((v, i) => i === 0 ? c.moveTo(x(i), y(v)) : c.lineTo(x(i), y(v)));
-                c.strokeStyle = green;
-                c.lineWidth = 2;
-                c.lineJoin = 'round';
-                c.stroke();
-                // last point marker
-                const lx = x(p.length - 1), ly = y(p[p.length - 1]);
-                c.beginPath();
-                c.arc(lx, ly, 4, 0, Math.PI * 2);
-                c.fillStyle = green;
-                c.fill();
-            }
+            const grad = c.createLinearGradient(0, padT, 0, H - padB);
+            grad.addColorStop(0, 'rgba(118,168,70,0.35)');
+            grad.addColorStop(1, 'rgba(118,168,70,0)');
+            c.beginPath();
+            c.moveTo(x(0), H - padB);
+            p.forEach((v, i) => c.lineTo(x(i), y(v)));
+            c.lineTo(x(p.length - 1), H - padB);
+            c.closePath();
+            c.fillStyle = grad;
+            c.fill();
+
+            c.beginPath();
+            p.forEach((v, i) => i === 0 ? c.moveTo(x(i), y(v)) : c.lineTo(x(i), y(v)));
+            c.strokeStyle = green;
+            c.lineWidth = 2;
+            c.lineJoin = 'round';
+            c.stroke();
+            // last point marker
+            const lx = x(p.length - 1), ly = y(p[p.length - 1]);
+            c.beginPath();
+            c.arc(lx, ly, 4, 0, Math.PI * 2);
+            c.fillStyle = green;
+            c.fill();
         }
 
         // Contact Form Logic
