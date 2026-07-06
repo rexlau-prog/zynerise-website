@@ -364,12 +364,25 @@
         // --------------------------------------------------
 
         // === FRA PERFORMANCE DATA ===================================
-        // Update these from http://178.104.167.25/investor/
-        // prices: chronological share price series (oldest -> newest).
+        // Auto-published daily by publish_website_fra.py on the FRA VPS
+        // (manual edits to this block are overwritten at 00:10 UTC).
+        // dates/prices: aligned chronological series (oldest -> newest).
         const FRA_DATA = {
             asOf: "2026-07-06",
             maxDrawdown: -0.13,   // percent
             sharpe: 10.89,
+            dates: [
+                "2026-05-01", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16",
+                "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22",
+                "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28",
+                "2026-05-29", "2026-05-30", "2026-05-31", "2026-06-01", "2026-06-02", "2026-06-03",
+                "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08", "2026-06-09",
+                "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14", "2026-06-15",
+                "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19", "2026-06-20", "2026-06-21",
+                "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-27",
+                "2026-06-28", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03",
+                "2026-07-04", "2026-07-05", "2026-07-06"
+            ],
             prices: [
                 1.0000, 0.9987, 0.9989, 0.9995, 1.0000, 1.0001, 1.0008, 1.0009, 1.0009, 1.0015,
                 1.0015, 1.0014, 1.0012, 1.0017, 1.0021, 1.0021, 1.0026, 1.0028, 1.0029, 1.0027,
@@ -395,7 +408,29 @@
             document.getElementById('fra-sharpe').textContent = FRA_DATA.sharpe.toFixed(2);
         }
 
-        function drawFraChart() {
+        const FRA_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        function fraDateTs(d) {
+            const [Y, M, D] = d.split('-').map(Number);
+            return Date.UTC(Y, M - 1, D);
+        }
+
+        function fraDateLabel(d, withYear) {
+            const [Y, M, D] = d.split('-').map(Number);
+            return FRA_MONTHS[M - 1] + ' ' + D + (withYear ? ', ' + Y : '');
+        }
+
+        // x position of each point, time-scaled so gaps between
+        // snapshot dates render at their true width
+        function fraPointXs(W) {
+            const padL = 48, padR = 12;
+            const ts = FRA_DATA.dates.map(fraDateTs);
+            const t0 = ts[0], span = (ts[ts.length - 1] - t0) || 1;
+            return ts.map(t => padL + ((t - t0) / span) * (W - padL - padR));
+        }
+
+        function drawFraChart(hoverIdx = null) {
             const cv = document.getElementById('fra-chart');
             if (!cv) return;
             const dpr = window.devicePixelRatio || 1;
@@ -409,7 +444,7 @@
             const padL = 48, padR = 12, padT = 12, padB = 24;
             const min = Math.min(...p), max = Math.max(...p);
             const range = (max - min) || 1;
-            const x = i => padL + (i / (p.length - 1)) * (W - padL - padR);
+            const xs = fraPointXs(W);
             const y = v => padT + (1 - (v - min) / range) * (H - padT - padB);
 
             c.clearRect(0, 0, W, H);
@@ -429,32 +464,110 @@
                 c.fillText(v.toFixed(3), 6, gy + 3);
             }
 
+            // x-axis date labels: evenly spaced in time, snapped to
+            // the nearest data point
+            c.textAlign = 'center';
+            const nTicks = Math.max(2, Math.min(6, Math.floor((W - padL - padR) / 90)));
+            for (let g = 0; g < nTicks; g++) {
+                const target = padL + ((W - padL - padR) * g) / (nTicks - 1);
+                let k = 0;
+                xs.forEach((px, i) => {
+                    if (Math.abs(px - target) < Math.abs(xs[k] - target)) k = i;
+                });
+                const lx = Math.min(Math.max(xs[k], padL + 20), W - padR - 20);
+                c.fillText(fraDateLabel(FRA_DATA.dates[k], false), lx, H - 8);
+            }
+            c.textAlign = 'left';
+
             const green = '#76A846';
 
             const grad = c.createLinearGradient(0, padT, 0, H - padB);
             grad.addColorStop(0, 'rgba(118,168,70,0.35)');
             grad.addColorStop(1, 'rgba(118,168,70,0)');
             c.beginPath();
-            c.moveTo(x(0), H - padB);
-            p.forEach((v, i) => c.lineTo(x(i), y(v)));
-            c.lineTo(x(p.length - 1), H - padB);
+            c.moveTo(xs[0], H - padB);
+            p.forEach((v, i) => c.lineTo(xs[i], y(v)));
+            c.lineTo(xs[p.length - 1], H - padB);
             c.closePath();
             c.fillStyle = grad;
             c.fill();
 
             c.beginPath();
-            p.forEach((v, i) => i === 0 ? c.moveTo(x(i), y(v)) : c.lineTo(x(i), y(v)));
+            p.forEach((v, i) => i === 0 ? c.moveTo(xs[i], y(v)) : c.lineTo(xs[i], y(v)));
             c.strokeStyle = green;
             c.lineWidth = 2;
             c.lineJoin = 'round';
             c.stroke();
             // last point marker
-            const lx = x(p.length - 1), ly = y(p[p.length - 1]);
+            const lx = xs[p.length - 1], ly = y(p[p.length - 1]);
             c.beginPath();
             c.arc(lx, ly, 4, 0, Math.PI * 2);
             c.fillStyle = green;
             c.fill();
+
+            // hover: crosshair + highlighted point + tooltip
+            if (hoverIdx !== null && hoverIdx >= 0 && hoverIdx < p.length) {
+                const hx = xs[hoverIdx], hy = y(p[hoverIdx]);
+                c.strokeStyle = 'rgba(255,255,255,0.25)';
+                c.lineWidth = 1;
+                c.setLineDash([4, 4]);
+                c.beginPath();
+                c.moveTo(hx, padT);
+                c.lineTo(hx, H - padB);
+                c.stroke();
+                c.setLineDash([]);
+                c.beginPath();
+                c.arc(hx, hy, 5, 0, Math.PI * 2);
+                c.fillStyle = '#0a0a0a';
+                c.fill();
+                c.strokeStyle = green;
+                c.lineWidth = 2;
+                c.stroke();
+
+                const dateLine = fraDateLabel(FRA_DATA.dates[hoverIdx], true);
+                const priceLine = '$' + p[hoverIdx].toFixed(4);
+                c.font = 'bold 12px monospace';
+                const tw = Math.max(c.measureText(dateLine).width,
+                                    c.measureText(priceLine).width) + 20;
+                const th = 42;
+                let bx = hx + 12;
+                if (bx + tw > W - padR) bx = hx - 12 - tw;
+                const by = Math.min(Math.max(hy - th / 2, padT), H - padB - th);
+                c.fillStyle = 'rgba(10,10,10,0.92)';
+                c.fillRect(bx, by, tw, th);
+                c.strokeStyle = 'rgba(118,168,70,0.5)';
+                c.lineWidth = 1;
+                c.strokeRect(bx, by, tw, th);
+                c.font = '11px monospace';
+                c.fillStyle = 'rgba(255,255,255,0.55)';
+                c.fillText(dateLine, bx + 10, by + 17);
+                c.font = 'bold 12px monospace';
+                c.fillStyle = green;
+                c.fillText(priceLine, bx + 10, by + 33);
+            }
         }
+
+        (function initFraChartHover() {
+            const cv = document.getElementById('fra-chart');
+            if (!cv) return;
+            cv.style.cursor = 'crosshair';
+            let raf = null;
+            const redraw = idx => {
+                if (raf) cancelAnimationFrame(raf);
+                raf = requestAnimationFrame(() => drawFraChart(idx));
+            };
+            cv.addEventListener('pointermove', e => {
+                const rect = cv.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const xs = fraPointXs(rect.width);
+                let k = 0;
+                xs.forEach((px, i) => {
+                    if (Math.abs(px - mx) < Math.abs(xs[k] - mx)) k = i;
+                });
+                redraw(k);
+            });
+            cv.addEventListener('pointerleave', () => redraw(null));
+        })();
 
         // Contact Form Logic
         const contactForm = document.getElementById('contact-form');
