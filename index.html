@@ -212,7 +212,7 @@
             </div>
 
             <!-- Stat cards -->
-            <div class="grid grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div class="glass border border-white/5 p-8 text-center">
                     <p class="text-[10px] tracking-[0.3em] text-gray-500 uppercase mb-3">Maximum Drawdown</p>
                     <p id="fra-mdd" class="text-3xl md:text-4xl font-bold text-white font-mono">—</p>
@@ -299,23 +299,24 @@
                 </div>
                 <div class="relative">
                     <form id="contact-form" class="space-y-6">
+                        <input type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">
                         <div class="grid md:grid-cols-2 gap-6">
                             <div class="space-y-2">
-                                <label class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Identity</label>
-                                <input type="text" name="name" placeholder="Name" required class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
+                                <label for="contact-name" class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Identity</label>
+                                <input type="text" name="name" id="contact-name" placeholder="Name" required class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
                             </div>
                             <div class="space-y-2">
-                                <label class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Endpoint</label>
-                                <input type="email" name="email" placeholder="Email" required class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
+                                <label for="contact-email" class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Endpoint</label>
+                                <input type="email" name="email" id="contact-email" placeholder="Email" required class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
                             </div>
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Organization</label>
-                            <input type="text" name="organization" placeholder="Firm (Leave blank if individual)" class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
+                            <label for="contact-organization" class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Organization</label>
+                            <input type="text" name="organization" id="contact-organization" placeholder="Firm (Leave blank if individual)" class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none">
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Message</label>
-                            <textarea name="message" placeholder="Your inquiry details..." rows="4" class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none"></textarea>
+                            <label for="contact-message" class="text-[10px] tracking-[0.3em] text-gray-500 uppercase ml-1">Message</label>
+                            <textarea name="message" id="contact-message" placeholder="Your inquiry details..." rows="4" class="w-full bg-white/5 border border-white/10 p-4 text-sm text-white focus:outline-none"></textarea>
                         </div>
                         <button type="submit" id="form-submit-btn" class="w-full py-4 bg-[#76A846] text-black font-bold text-xs tracking-[0.3em] hover:bg-white transition-all duration-300 uppercase">
                             Initialize Contact
@@ -396,16 +397,27 @@
 
         function renderFraStats() {
             const p = FRA_DATA.prices;
+            const d = FRA_DATA.dates;
             const last = p[p.length - 1];
-            const prev = p[p.length - 2] ?? last;
-            const chg = ((last - prev) / prev) * 100;
             document.getElementById('fra-price').textContent = last.toFixed(3);
+            // Daily change: only honest when the previous point is exactly
+            // one day earlier — hide it across snapshot gaps.
             const chgEl = document.getElementById('fra-change');
-            chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-            chgEl.style.color = chg >= 0 ? '#76A846' : '#e05c5c';
+            const oneDayGap = d.length >= 2 &&
+                fraDateTs(d[d.length - 1]) - fraDateTs(d[d.length - 2]) === 86400000;
+            if (oneDayGap) {
+                const prev = p[p.length - 2];
+                const chg = ((last - prev) / prev) * 100;
+                chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+                chgEl.style.color = chg >= 0 ? '#76A846' : '#e05c5c';
+            } else {
+                chgEl.textContent = '';
+            }
             document.getElementById('fra-asof').textContent = 'As of ' + FRA_DATA.asOf;
-            document.getElementById('fra-mdd').textContent = FRA_DATA.maxDrawdown.toFixed(2) + '%';
-            document.getElementById('fra-sharpe').textContent = FRA_DATA.sharpe.toFixed(2);
+            document.getElementById('fra-mdd').textContent =
+                Number.isFinite(FRA_DATA.maxDrawdown) ? FRA_DATA.maxDrawdown.toFixed(2) + '%' : '—';
+            document.getElementById('fra-sharpe').textContent =
+                Number.isFinite(FRA_DATA.sharpe) ? FRA_DATA.sharpe.toFixed(2) : '—';
         }
 
         const FRA_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -442,8 +454,9 @@
             const W = rect.width, H = rect.height;
             const p = FRA_DATA.prices;
             const padL = 48, padR = 12, padT = 12, padB = 24;
-            const min = Math.min(...p), max = Math.max(...p);
-            const range = (max - min) || 1;
+            let min = Math.min(...p), max = Math.max(...p);
+            if (max === min) { min -= 0.005; max += 0.005; }  // flat series: pad, don't fabricate a range
+            const range = max - min;
             const xs = fraPointXs(W);
             const y = v => padT + (1 - (v - min) / range) * (H - padT - padB);
 
